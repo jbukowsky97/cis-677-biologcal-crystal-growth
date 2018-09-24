@@ -7,16 +7,25 @@
 #include <regex>
 #include <tuple>
 
+#include "omp.h"
+
 /**********************************************************************
  * generates a random point outside of the radius of the crystal
 ***********************************************************************/
-std::tuple<int, int> generatePoint(std::default_random_engine& generator, const int gridSize, const int center, const int radius) {
+std::tuple<int, int> generatePoint(std::default_random_engine& generator, std::vector<std::vector<char>>& grid, const int gridSize, const int center, const int radius) {
     std::uniform_int_distribution<int> distribution(0, gridSize - 1);
     int x, y;
-    do {
-        x = distribution(generator);
-        y = distribution(generator);
-    } while (abs(center - x) <= radius + 1 && abs(center - y) <= radius + 1);
+    #pragma omp critical
+    {
+        char tempChar;
+        do {
+            x = distribution(generator);
+            y = distribution(generator);
+            // #pragma omp atomic read
+            tempChar = grid[x][y];
+        } while ((abs(center - x) <= radius + 1 && abs(center - y) <= radius + 1) || tempChar != 0);
+        // grid[x][y] = 'p';
+    }
     return std::make_tuple(x, y);
 }
 
@@ -27,25 +36,35 @@ std::tuple<int, int> generatePoint(std::default_random_engine& generator, const 
 ***********************************************************************/
 std::tuple<int, int> nextMove(std::default_random_engine& generator) {
     std::uniform_int_distribution<int> distribution(-1, 1);
-    int dx = distribution(generator);
-    int dy = distribution(generator);
+    int dx, dy;
+    dx = distribution(generator);
+    dy = distribution(generator);
     return std::make_tuple(dx, dy);
 }
 
 /* determines if the current particle should stick to the crystal */
 bool shouldStick(std::vector<std::vector<char>>& grid, const int gridSize, const int x, const int y) {
+    bool returnBool = false;
     for (int dx = -1; dx <= 1; dx++) {
         for (int dy = -1; dy <= 1; dy++) {
             const int newX = x + dx;
             const int newY = y + dy;
             if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize) {
                 if (grid[newX][newY] == 'X') {
-                    return true;
+                    // #pragma omp atomic write
+                    #pragma omp critical
+                    {
+                    grid[x][y] = 'X';
+                    }
+                    returnBool = true;
+                }
+                if (returnBool) {
+                    return returnBool;
                 }
             }
         }
     }
-    return false;
+    return returnBool;
 }
 
 /**********************************************************************
@@ -55,17 +74,35 @@ void walkParticle(std::default_random_engine& generator, std::vector<std::vector
     while (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
         /* check if should stick */
         if (shouldStick(grid, gridSize, x, y)) {
-            grid[x][y] = 'X';
             return;
         }
 
+        int newX;
+        int newY;
         /* generate next move */
-        const std::tuple<int, int> direction = nextMove(generator);
-        const int dx = std::get<0>(direction);
-        const int dy = std::get<1>(direction);
+        // #pragma omp critical
+        // {
+            char tempChar = 1;
+            do {
+            const std::tuple<int, int> direction = nextMove(generator);
+            const int dx = std::get<0>(direction);
+            const int dy = std::get<1>(direction);
+            newX = x + dx;
+            newY = y + dy;
+            const bool inBounds = newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize;
+            if (inBounds) {
+                // #pragma omp atomic read
+                tempChar = grid[newX][newY];
+            }
+            } while (tempChar != 0);
+            // grid[x][y] = 0;
+            // if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize) {
+            //     grid[newX][newY] = 'p';
+            // }
+        // }
 
-        x += dx;
-        y += dy;
+        x = newX;
+        y = newY;
     }
 }
 
@@ -121,30 +158,43 @@ int main(int argc, char* argv[]) {
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     generator.seed(seed);
 
-    /* sequentially run each particle through its journey in the lattice */
-    for (unsigned long p = 0; p < numParticles; p++) {
-        /* check if radius is the entire grid */
-        if (radius >= gridSize / 2 - 1) {
-            std::cout << "radius is " << radius << ", which means no room is left, finished at particle " << p + 1 << std::endl;
-            break;
+    #pragma omp parallel
+    {
+        int threadId = omp_get_thread_num();
+        int numThreads = omp_get_num_threads();
+
+        unsigned long sectionSize = numParticles / numThreads;
+        int remaining = numParticles % numThreads;
+        if (threadId < remaining) {
+            sectionSize++;
         }
 
-        /* generate point */
-        const auto point = generatePoint(generator, gridSize, center, radius);
-        int x = std::get<0>(point);
-        int y = std::get<1>(point);
+        // for (unsigned long p = 0; p < numParticles; p++) {
+        for (unsigned long p = 0; p < sectionSize; p++) {
+            /* check if radius is the entire grid */
+            if (radius >= gridSize / 2 - 1) {
+                std::cout << "radius is " << radius << ", which means no room is left, finished at particle " << p + 1 << std::endl;
+                break;
+            } else {
 
-        /* walk particle until it leaves lattice or sticks to the crystal */
-        walkParticle(generator, grid, gridSize, x, y);
+                /* generate point */
+                const auto point = generatePoint(generator, grid, gridSize, center, radius);
+                int x = std::get<0>(point);
+                int y = std::get<1>(point);
 
-        /* check if particle stuck, if it did update radius if necessary */
-        if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-            const int distance = std::max(std::abs(center - x), std::abs(center - y));
-            if (distance > radius) {
-                radius = distance;
+                /* walk particle until it leaves lattice or sticks to the crystal */
+                walkParticle(generator, grid, gridSize, x, y);
+
+                /* check if particle stuck, if it did update radius if necessary */
+                if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+                    const int distance = std::max(std::abs(center - x), std::abs(center - y));
+                    if (distance > radius) {
+                        radius = distance;
+                    }
+                }
             }
         }
-    }
+    } 
 
     /* print crude depiction of final crystal inside lattice */
     // for (int i = 0; i < gridSize; i++) {
