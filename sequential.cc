@@ -89,10 +89,10 @@ int main(int argc, char* argv[]) {
     }
 
     /* attempt to parse gridSize and numParticles */
-    int gridSize;
+    int tempSize;
     unsigned long numParticles;
     try {
-        gridSize = std::stoi(gridSizeStr);
+        tempSize = std::stoi(gridSizeStr);
         numParticles = std::stoul(numParticlesStr);
     } catch (...) {
         std::cerr << "Grid Size and Number of Particles must be positive integers" << std::endl;
@@ -100,10 +100,12 @@ int main(int argc, char* argv[]) {
     }
 
     /* fail if gridSize is even */
-    if (gridSize % 2 == 0) {
+    if (tempSize % 2 == 0) {
         std::cerr << "Grid Size must be odd" << std::endl;
         exit(EXIT_FAILURE);
     }
+
+    const int gridSize = tempSize;
 
     std::vector<std::vector<char>> grid(gridSize, std::vector<char>(gridSize));
 
