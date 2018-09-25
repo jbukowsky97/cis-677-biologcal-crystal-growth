@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <random>
@@ -70,6 +71,47 @@ void walkParticle(std::default_random_engine& generator, std::vector<std::vector
 }
 
 /**********************************************************************
+ * write result to file
+***********************************************************************/
+void writeToFile(const std::vector<std::vector<char>>& grid, const int gridSize) {
+    std::ofstream myfile;
+    myfile.open("sequential_result.txt");
+    for (int i = 0; i < gridSize; i++) {
+        for (int k = 0; k < gridSize; k++) {
+            int value = 0;
+            if (grid[i][k] != 0) {
+                value = 1;
+            }
+            if (k != 0) {
+                myfile << ",";
+            }
+            myfile << value;
+        }
+        if (i != gridSize - 1) {
+            myfile << "\n";
+        }
+    }
+    myfile.close();
+}
+
+/**********************************************************************
+ * print crude result visual to console
+***********************************************************************/
+void consoleVisual(const std::vector<std::vector<char>>& grid, const int gridSize) {
+    /* print crude depiction of final crystal inside lattice */
+    for (int i = 0; i < gridSize; i++) {
+        for (int k = 0; k < gridSize; k++) {
+            char value = grid[i][k];
+            if (value == 0) {
+                value = '-';
+            }
+            std::cout << value << " ";
+        }
+        std::cout << std::endl;
+    }
+}
+
+/**********************************************************************
  * main function to manage crystal, lattice, and particles sequentially
 ***********************************************************************/
 int main(int argc, char* argv[]) {
@@ -90,10 +132,10 @@ int main(int argc, char* argv[]) {
 
     /* attempt to parse gridSize and numParticles */
     int tempSize;
-    unsigned long numParticles;
+    unsigned long tempParticles;
     try {
         tempSize = std::stoi(gridSizeStr);
-        numParticles = std::stoul(numParticlesStr);
+        tempParticles = std::stoul(numParticlesStr);
     } catch (...) {
         std::cerr << "Grid Size and Number of Particles must be positive integers" << std::endl;
         exit(EXIT_FAILURE);
@@ -106,6 +148,7 @@ int main(int argc, char* argv[]) {
     }
 
     const int gridSize = tempSize;
+    const unsigned long numParticles = tempParticles;
 
     std::vector<std::vector<char>> grid(gridSize, std::vector<char>(gridSize));
 
@@ -127,7 +170,6 @@ int main(int argc, char* argv[]) {
     for (unsigned long p = 0; p < numParticles; p++) {
         /* check if radius is the entire grid */
         if (radius >= gridSize / 2 - 1) {
-            std::cout << "radius is " << radius << ", which means no room is left, finished at particle " << p + 1 << std::endl;
             break;
         }
 
@@ -148,15 +190,5 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    /* print crude depiction of final crystal inside lattice */
-    // for (int i = 0; i < gridSize; i++) {
-    //     for (int k = 0; k < gridSize; k++) {
-    //         char value = grid[i][k];
-    //         if (value == 0) {
-    //             value = '-';
-    //         }
-    //         std::cout << value << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
+    writeToFile(grid, gridSize);
 }
