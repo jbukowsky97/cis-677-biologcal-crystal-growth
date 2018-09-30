@@ -30,24 +30,6 @@ void writeGrid(std::vector<std::vector<char>>& grid, const int x, const int y, c
 }
 
 /**********************************************************************
- * reads radius, thread-safe
-***********************************************************************/
-int readRadius(const int& radius) {
-    int value;
-    #pragma omp atomic read
-    value = radius;
-    return value;
-}
-
-/**********************************************************************
- * writes to radius, thread-safe
-***********************************************************************/
-void writeRadius(int& radius, const int value) {
-    #pragma omp atomic write
-    radius = value;
-}
-
-/**********************************************************************
  * generates a random point outside of the radius of the crystal
 ***********************************************************************/
 std::tuple<int, int> generatePoint(std::default_random_engine& generator, std::vector<std::vector<char>>& grid, const int gridSize, const int center, const int radius) {
@@ -223,7 +205,11 @@ int main(int argc, char* argv[]) {
         // for (unsigned long p = 0; p < numParticles; p++) {
         for (unsigned long p = 0; p < sectionSize; p++) {
             /* check if radius is the entire grid */
-            int tempRadius = readRadius(radius);
+            int tempRadius;
+            #pragma omp critical (radius)
+            {
+                tempRadius = readRadius(radius);
+            }
             if (tempRadius >= gridSize / 2 - 1) {
                 break;
             }
@@ -239,8 +225,11 @@ int main(int argc, char* argv[]) {
             /* check if particle stuck, if it did update radius if necessary */
             if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
                 const int distance = std::max(std::abs(center - x), std::abs(center - y));
-                if (distance > readRadius(radius)) {
-                    writeRadius(radius, distance);
+                #pragma omp critical (radius)
+                {
+                    if (distance > radius) {
+                        radius = distance;
+                    }
                 }
             }
         }
