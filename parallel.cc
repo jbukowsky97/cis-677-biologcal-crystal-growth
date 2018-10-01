@@ -184,16 +184,16 @@ int main(int argc, char* argv[]) {
     /* place starting crystal */
     grid[center][center] = 'X';
 
-    #pragma omp parallel
-    {
-        int threadId = omp_get_thread_num();
-        int numThreads = omp_get_num_threads();
+    #pragma omp parallel for schedule(dynamic, 1)
+    for (unsigned long i = 0; i < numParticles; i++) {
+        // int threadId = omp_get_thread_num();
+        // int numThreads = omp_get_num_threads();
 
-        unsigned long sectionSize = numParticles / numThreads;
-        int remaining = numParticles % numThreads;
-        if (threadId < remaining) {
-            sectionSize++;
-        }
+        // unsigned long sectionSize = numParticles / numThreads;
+        // int remaining = numParticles % numThreads;
+        // if (threadId < remaining) {
+        //     sectionSize++;
+        // }
 
         /* create random number generator */
         std::default_random_engine generator;
@@ -202,16 +202,16 @@ int main(int argc, char* argv[]) {
         unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
         generator.seed(seed);
 
-        // for (unsigned long p = 0; p < numParticles; p++) {
-        for (unsigned long p = 0; p < sectionSize; p++) {
+        // // for (unsigned long p = 0; p < numParticles; p++) {
+        // for (unsigned long p = 0; p < sectionSize; p++) {
             /* check if radius is the entire grid */
             int tempRadius;
             #pragma omp critical (radius)
             {
-                tempRadius = readRadius(radius);
+                tempRadius = radius;
             }
             if (tempRadius >= gridSize / 2 - 1) {
-                break;
+                continue;
             }
 
             /* generate point */
@@ -232,7 +232,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
             }
-        }
+        // }
     }
 
     writeToFile(grid, gridSize);
