@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
             int tempRadius;
             #pragma omp critical (radius)
             {
-                tempRadius = readRadius(radius);
+                tempRadius = radius;
             }
             if (tempRadius >= gridSize / 2 - 1) {
                 break;
