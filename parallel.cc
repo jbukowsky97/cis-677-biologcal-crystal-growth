@@ -186,14 +186,6 @@ int main(int argc, char* argv[]) {
 
     #pragma omp parallel for schedule(dynamic, 1)
     for (unsigned long i = 0; i < numParticles; i++) {
-        // int threadId = omp_get_thread_num();
-        // int numThreads = omp_get_num_threads();
-
-        // unsigned long sectionSize = numParticles / numThreads;
-        // int remaining = numParticles % numThreads;
-        // if (threadId < remaining) {
-        //     sectionSize++;
-        // }
 
         /* create random number generator */
         std::default_random_engine generator;
@@ -202,37 +194,34 @@ int main(int argc, char* argv[]) {
         unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
         generator.seed(seed);
 
-        // // for (unsigned long p = 0; p < numParticles; p++) {
-        // for (unsigned long p = 0; p < sectionSize; p++) {
-            /* check if radius is the entire grid */
-            int tempRadius;
+        /* check if radius is the entire grid */
+        int tempRadius;
+        #pragma omp critical (radius)
+        {
+            tempRadius = radius;
+        }
+        if (tempRadius >= gridSize / 2 - 1) {
+            continue;
+        }
+
+        /* generate point */
+        const auto point = generatePoint(generator, grid, gridSize, center, tempRadius);
+        int x = std::get<0>(point);
+        int y = std::get<1>(point);
+
+        /* walk particle until it leaves lattice or sticks to the crystal */
+        walkParticle(generator, grid, gridSize, x, y);
+
+        /* check if particle stuck, if it did update radius if necessary */
+        if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+            const int distance = std::max(std::abs(center - x), std::abs(center - y));
             #pragma omp critical (radius)
             {
-                tempRadius = radius;
-            }
-            if (tempRadius >= gridSize / 2 - 1) {
-                continue;
-            }
-
-            /* generate point */
-            const auto point = generatePoint(generator, grid, gridSize, center, tempRadius);
-            int x = std::get<0>(point);
-            int y = std::get<1>(point);
-
-            /* walk particle until it leaves lattice or sticks to the crystal */
-            walkParticle(generator, grid, gridSize, x, y);
-
-            /* check if particle stuck, if it did update radius if necessary */
-            if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
-                const int distance = std::max(std::abs(center - x), std::abs(center - y));
-                #pragma omp critical (radius)
-                {
-                    if (distance > radius) {
-                        radius = distance;
-                    }
+                if (distance > radius) {
+                    radius = distance;
                 }
             }
-        // }
+        }
     }
 
     writeToFile(grid, gridSize);
