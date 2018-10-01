@@ -172,6 +172,8 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     const int gridSize = tempSize;
     const unsigned long numParticles = tempParticles;
 
@@ -223,6 +225,10 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() / 1000.0 << " s" << std::endl;
 
     writeToFile(grid, gridSize);
 }
